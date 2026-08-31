@@ -215,6 +215,9 @@ function isDataStream(v: unknown) {
 
 type ResultTuple<T> = [undefined, T] | [TRPCError, undefined];
 
+const unsupportedMediaTypeErrorMessage =
+  'Cannot use stream-like response in non-streaming request - use httpBatchStreamLink';
+
 function toTRPCResponse<TRouter extends AnyRouter>(opts: {
   config: TRouter['_def']['_config'];
   ctx: inferRouterContext<TRouter> | undefined;
@@ -240,6 +243,36 @@ function toTRPCResponse<TRouter extends AnyRouter>(opts: {
   return {
     result: { data: opts.resultData },
   };
+}
+
+function toTRPCResponseFromCall<TRouter extends AnyRouter>(opts: {
+  config: TRouter['_def']['_config'];
+  ctx: inferRouterContext<TRouter> | undefined;
+  error: TRPCError | undefined;
+  resultData?: unknown;
+  call: NonNullable<TRPCRequestInfo['calls'][number]>;
+}): TRPCResponse<unknown, inferRouterError<TRouter>> {
+  const { call, error, resultData } = opts;
+  const input = call.result();
+  const path = call.path;
+  const type = call.procedure?._def.type ?? 'unknown';
+
+  return toTRPCResponse({
+    config: opts.config,
+    ctx: opts.ctx,
+    error,
+    input,
+    path,
+    type,
+    resultData,
+  });
+}
+
+function createDataStreamGuardError(): TRPCError {
+  return new TRPCError({
+    code: 'UNSUPPORTED_MEDIA_TYPE',
+    message: unsupportedMediaTypeErrorMessage,
+  });
 }
 
 export async function resolveResponse<TRouter extends AnyRouter>(
@@ -447,19 +480,13 @@ export async function resolveResponse<TRouter extends AnyRouter>(
           headers.set('content-type', 'application/json');
 
           if (isDataStream(result?.data)) {
-            throw new TRPCError({
-              code: 'UNSUPPORTED_MEDIA_TYPE',
-              message:
-                'Cannot use stream-like response in non-streaming request - use httpBatchStreamLink',
-            });
+            throw createDataStreamGuardError();
           }
-          const res = toTRPCResponse<TRouter>({
+          const res = toTRPCResponseFromCall<TRouter>({
             config,
             ctx: ctxManager.valueOrUndefined(),
+            call,
             error,
-            input: call!.result(),
-            path: call!.path,
-            type: info.type,
             resultData: result?.data,
           });
 
@@ -625,16 +652,14 @@ export async function resolveResponse<TRouter extends AnyRouter>(
         data: rpcCalls.map(async (res, index) => {
           const [error, result] = await res;
 
-          const call = info.calls[index];
+          const call = info.calls[index]!;
 
           if (error) {
-            return toTRPCResponse<TRouter>({
+            return toTRPCResponseFromCall<TRouter>({
               config,
               ctx: ctxManager.valueOrUndefined(),
+              call,
               error,
-              input: call!.result(),
-              path: call!.path,
-              type: call!.procedure?._def.type ?? 'unknown',
             });
           }
 
@@ -700,57 +725,51 @@ export async function resolveResponse<TRouter extends AnyRouter>(
      * - return a complete HTTPResponse
      */
     headers.set('content-type', 'application/json');
-    const results: RPCResult[] = (await Promise.all(rpcCalls)).map(
-      (res): RPCResult => {
-        const [error, result] = res;
+    const responsePairs = (await Promise.all(rpcCalls)).map(
+      ([error, result], index): {
+        error?: TRPCError | undefined;
+        response: TRPCResponse<unknown, inferRouterError<TRouter>>;
+      } => {
+        const call = info.calls[index]!;
         if (error) {
-          return res;
+          return {
+            error,
+            response: toTRPCResponseFromCall<TRouter>({
+              config,
+              ctx: ctxManager.valueOrUndefined(),
+              call,
+              error,
+            }),
+          };
         }
 
         if (isDataStream(result.data)) {
-          return [
-            new TRPCError({
-              code: 'UNSUPPORTED_MEDIA_TYPE',
-              message:
-                'Cannot use stream-like response in non-streaming request - use httpBatchStreamLink',
+          const dataStreamError = createDataStreamGuardError();
+          return {
+            error: dataStreamError,
+            response: toTRPCResponseFromCall<TRouter>({
+              config,
+              ctx: ctxManager.valueOrUndefined(),
+              call,
+              error: dataStreamError,
             }),
-            undefined,
-          ];
+          };
         }
-        return res;
-      },
-    );
-    const resultAsRPCResponse = results.map(
-      (
-        [error, result],
-        index,
-      ): TRPCResponse<unknown, inferRouterError<TRouter>> => {
-        const call = info.calls[index]!;
-        if (error) {
-          return toTRPCResponse<TRouter>({
+
+        return {
+          response: toTRPCResponseFromCall<TRouter>({
             config,
             ctx: ctxManager.valueOrUndefined(),
-            error,
-            input: call.result(),
-            path: call.path,
-            type: call.procedure?._def.type ?? 'unknown',
-          });
-        }
-        return toTRPCResponse<TRouter>({
-          config,
-          ctx: ctxManager.valueOrUndefined(),
-          error: undefined,
-          input: call.result(),
-          path: call.path,
-          type: call.procedure?._def.type ?? 'unknown',
-          resultData: result.data,
-        });
+            call,
+            resultData: result.data,
+          }),
+        };
       },
     );
-
-    const errors = results
-      .map(([error]) => error)
+    const errors = responsePairs
+      .map((pair) => pair.error)
       .filter(Boolean) as TRPCError[];
+    const resultAsRPCResponse = responsePairs.map((pair) => pair.response);
 
     const headResponse = initResponse({
       ctx: ctxManager.valueOrUndefined(),
