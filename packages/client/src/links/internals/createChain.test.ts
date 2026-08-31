@@ -116,4 +116,35 @@ describe('chain', () => {
       ]
     `);
   });
+
+  test('converts synchronous chain errors to observable errors', () => {
+    const result$ = createChain<AnyRouter, unknown, unknown>({
+      links: [
+        () => {
+          throw new Error('synchronous chain failure');
+        },
+      ],
+      op: {
+        type: 'query',
+        id: 1,
+        input: 'world',
+        path: 'hello',
+        context: {},
+        signal: null,
+      },
+    });
+
+    const error = vi.fn();
+    const next = vi.fn();
+
+    result$.subscribe({ error, next });
+
+    expect(error).toHaveBeenCalledTimes(1);
+    expect(error).toHaveBeenCalledWith(
+      expect.objectContaining({
+        message: 'synchronous chain failure',
+      }),
+    );
+    expect(next).not.toHaveBeenCalled();
+  });
 });

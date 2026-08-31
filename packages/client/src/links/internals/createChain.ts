@@ -34,7 +34,14 @@ export function createChain<
       return subscription;
     }
 
-    const obs$ = execute();
-    return obs$.subscribe(observer);
+    try {
+      const obs$ = execute();
+      return obs$.subscribe(observer);
+    } catch (cause) {
+      observer.error(cause as Error);
+      return {
+        unsubscribe() {},
+      };
+    }
   });
 }
