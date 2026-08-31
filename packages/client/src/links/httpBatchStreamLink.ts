@@ -139,9 +139,17 @@ export function httpBatchStreamLink<TRouter extends AnyRouter>(
             },
             abortController,
           });
-          const promises = Object.keys(batchOps).map(
-            async (key): Promise<HTTPResult> => {
-              let json: TRPCResponse = await Promise.resolve(head[key]);
+          const promises = batchOps.map(
+            async (_op, index): Promise<HTTPResult> => {
+              const key = `${index}`;
+              const headItem = head[key];
+              if (!headItem) {
+                throw new Error(
+                  `Missing streamed result for batch item at index ${index}`,
+                );
+              }
+
+              let json: TRPCResponse = await Promise.resolve(headItem);
 
               if ('result' in json) {
                 /**
