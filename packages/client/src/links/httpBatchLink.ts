@@ -1,11 +1,8 @@
 import type { AnyRouter, ProcedureType } from '@trpc/server';
-import { observable } from '@trpc/server/observable';
-import { transformResult } from '@trpc/server/unstable-core-do-not-import';
 import type { BatchLoader } from '../internals/dataLoader';
 import { dataLoader } from '../internals/dataLoader';
 import { allAbortSignals } from '../internals/signals';
 import type { NonEmptyArray } from '../internals/types';
-import { TRPCClientError } from '../TRPCClientError';
 import type { HTTPBatchLinkOptions } from './HTTPBatchLinkOptions';
 import type { HTTPResult } from './internals/httpUtils';
 import {
@@ -14,6 +11,7 @@ import {
   resolveHTTPLinkOptions,
 } from './internals/httpUtils';
 import type { Operation, TRPCLink } from './types';
+import { createRequestResultObservable } from './internals/createRequestResult';
 
 /**
  * @see https://trpc.io/docs/client/links/httpBatchLink
@@ -91,50 +89,16 @@ export function httpBatchLink<TRouter extends AnyRouter>(
 
     const loaders = { query, mutation };
     return ({ op }) => {
-      return observable((observer) => {
-        /* istanbul ignore if -- @preserve */
-        if (op.type === 'subscription') {
-          throw new Error(
-            'Subscriptions are unsupported by `httpLink` - use `httpSubscriptionLink` or `wsLink`',
-          );
-        }
-        const loader = loaders[op.type];
-        const promise = loader.load(op);
+      /* istanbul ignore if -- @preserve */
+      if (op.type === 'subscription') {
+        throw new Error(
+          'Subscriptions are unsupported by `httpLink` - use `httpSubscriptionLink` or `wsLink`',
+        );
+      }
 
-        let _res = undefined as HTTPResult | undefined;
-        promise
-          .then((res) => {
-            _res = res;
-            const transformed = transformResult(
-              res.json,
-              resolvedOpts.transformer.output,
-            );
-
-            if (!transformed.ok) {
-              observer.error(
-                TRPCClientError.from(transformed.error, {
-                  meta: res.meta,
-                }),
-              );
-              return;
-            }
-            observer.next({
-              context: res.meta,
-              result: transformed.result,
-            });
-            observer.complete();
-          })
-          .catch((err) => {
-            observer.error(
-              TRPCClientError.from(err, {
-                meta: _res?.meta,
-              }),
-            );
-          });
-
-        return () => {
-          // noop
-        };
+      return createRequestResultObservable<unknown>({
+        request: loaders[op.type].load(op),
+        transformerOutput: resolvedOpts.transformer.output,
       });
     };
   };

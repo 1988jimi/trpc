@@ -1,13 +1,6 @@
-import { observable } from '@trpc/server/observable';
-import type {
-  AnyClientTypes,
-  AnyRouter,
-} from '@trpc/server/unstable-core-do-not-import';
-import { transformResult } from '@trpc/server/unstable-core-do-not-import';
-import { TRPCClientError } from '../TRPCClientError';
+import type { AnyClientTypes, AnyTRPCRouter } from '@trpc/server/unstable-core-do-not-import';
 import type {
   HTTPLinkBaseOptions,
-  HTTPResult,
   Requester,
 } from './internals/httpUtils';
 import {
@@ -23,6 +16,7 @@ import {
   type Operation,
   type TRPCLink,
 } from './types';
+import { createRequestResultObservable } from './internals/createRequestResult';
 
 export type HTTPLinkOptions<TRoot extends AnyClientTypes> =
   HTTPLinkBaseOptions<TRoot> & {
@@ -72,70 +66,42 @@ const universalRequester: Requester = (opts) => {
 /**
  * @see https://trpc.io/docs/client/links/httpLink
  */
-export function httpLink<TRouter extends AnyRouter = AnyRouter>(
+export function httpLink<TRouter extends AnyTRPCRouter = AnyTRPCRouter>(
   opts: HTTPLinkOptions<TRouter['_def']['_config']['$types']>,
 ): TRPCLink<TRouter> {
   const resolvedOpts = resolveHTTPLinkOptions(opts);
   return () => {
     return (operationOpts) => {
       const { op } = operationOpts;
-      return observable((observer) => {
-        const { path, input, type } = op;
-        /* istanbul ignore if -- @preserve */
-        if (type === 'subscription') {
-          throw new Error(
-            'Subscriptions are unsupported by `httpLink` - use `httpSubscriptionLink` or `wsLink`',
-          );
-        }
-
-        const request = universalRequester({
-          ...resolvedOpts,
-          type,
-          path,
-          input,
-          signal: op.signal,
-          headers() {
-            if (!opts.headers) {
-              return {};
-            }
-            if (typeof opts.headers === 'function') {
-              return opts.headers({
-                op,
-              });
-            }
-            return opts.headers;
-          },
-        });
-        let meta: HTTPResult['meta'] | undefined = undefined;
-        request
-          .then((res) => {
-            meta = res.meta;
-            const transformed = transformResult(
-              res.json,
-              resolvedOpts.transformer.output,
+      return createRequestResultObservable<unknown>({
+        request: (async () => {
+          const { path, input, type } = op;
+          /* istanbul ignore if -- @preserve */
+          if (type === 'subscription') {
+            throw new Error(
+              'Subscriptions are unsupported by `httpLink` - use `httpSubscriptionLink` or `wsLink`',
             );
-
-            if (!transformed.ok) {
-              observer.error(
-                TRPCClientError.from(transformed.error, {
-                  meta,
-                }),
-              );
-              return;
-            }
-            observer.next({
-              context: res.meta,
-              result: transformed.result,
-            });
-            observer.complete();
-          })
-          .catch((cause) => {
-            observer.error(TRPCClientError.from(cause, { meta }));
+          }
+          return await universalRequester({
+            ...resolvedOpts,
+            type,
+            path,
+            input,
+            signal: op.signal,
+            headers() {
+              if (!opts.headers) {
+                return {};
+              }
+              if (typeof opts.headers === 'function') {
+                return opts.headers({
+                  op,
+                });
+              }
+              return opts.headers;
+            },
           });
-
-        return () => {
-          // noop
-        };
+        })(),
+        transformerOutput: resolvedOpts.transformer.output,
       });
     };
   };
