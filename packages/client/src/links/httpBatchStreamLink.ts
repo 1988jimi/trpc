@@ -117,6 +117,7 @@ export function httpBatchStreamLink<TRouter extends AnyRouter>(
                   json,
                   meta: {
                     response: res,
+                    responseJSON: json,
                   },
                 }),
             );
