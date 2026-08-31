@@ -12,6 +12,7 @@ import {
 } from './internals/httpUtils';
 import type { Operation, TRPCLink } from './types';
 import { createRequestResultObservable } from './internals/createRequestResult';
+import { TRPCError } from '@trpc/server';
 
 /**
  * @see https://trpc.io/docs/client/links/httpBatchLink
@@ -75,6 +76,12 @@ export function httpBatchLink<TRouter extends AnyRouter>(
           const resJSON = Array.isArray(res.json)
             ? res.json
             : batchOps.map(() => res.json);
+          if (Array.isArray(res.json) && resJSON.length !== batchOps.length) {
+            throw new TRPCError({
+              code: 'INTERNAL_SERVER_ERROR',
+              message: 'Batch response size mismatch',
+            });
+          }
           const result = resJSON.map((item) => ({
             meta: res.meta,
             json: item,
