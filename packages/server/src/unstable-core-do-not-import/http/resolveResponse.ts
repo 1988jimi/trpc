@@ -215,6 +215,33 @@ function isDataStream(v: unknown) {
 
 type ResultTuple<T> = [undefined, T] | [TRPCError, undefined];
 
+function toTRPCResponse<TRouter extends AnyRouter>(opts: {
+  config: TRouter['_def']['_config'];
+  ctx: inferRouterContext<TRouter> | undefined;
+  error: TRPCError | undefined;
+  input: unknown;
+  path: string;
+  type: ProcedureType | 'unknown';
+  resultData?: unknown;
+}): TRPCResponse<unknown, inferRouterError<TRouter>> {
+  if (opts.error) {
+    return {
+      error: getErrorShape({
+        config: opts.config,
+        ctx: opts.ctx,
+        error: opts.error,
+        input: opts.input,
+        path: opts.path,
+        type: opts.type,
+      }),
+    };
+  }
+
+  return {
+    result: { data: opts.resultData },
+  };
+}
+
 export async function resolveResponse<TRouter extends AnyRouter>(
   opts: ResolveHTTPRequestOptions<TRouter>,
 ): Promise<Response> {
@@ -426,18 +453,15 @@ export async function resolveResponse<TRouter extends AnyRouter>(
                 'Cannot use stream-like response in non-streaming request - use httpBatchStreamLink',
             });
           }
-          const res: TRPCResponse<unknown, inferRouterError<TRouter>> = error
-            ? {
-                error: getErrorShape({
-                  config,
-                  ctx: ctxManager.valueOrUndefined(),
-                  error,
-                  input: call!.result(),
-                  path: call!.path,
-                  type: info.type,
-                }),
-              }
-            : { result: { data: result.data } };
+          const res = toTRPCResponse<TRouter>({
+            config,
+            ctx: ctxManager.valueOrUndefined(),
+            error,
+            input: call!.result(),
+            path: call!.path,
+            type: info.type,
+            resultData: result?.data,
+          });
 
           const headResponse = initResponse({
             ctx: ctxManager.valueOrUndefined(),
@@ -604,16 +628,14 @@ export async function resolveResponse<TRouter extends AnyRouter>(
           const call = info.calls[index];
 
           if (error) {
-            return {
-              error: getErrorShape({
-                config,
-                ctx: ctxManager.valueOrUndefined(),
-                error,
-                input: call!.result(),
-                path: call!.path,
-                type: call!.procedure?._def.type ?? 'unknown',
-              }),
-            };
+            return toTRPCResponse<TRouter>({
+              config,
+              ctx: ctxManager.valueOrUndefined(),
+              error,
+              input: call!.result(),
+              path: call!.path,
+              type: call!.procedure?._def.type ?? 'unknown',
+            });
           }
 
           /**
@@ -705,20 +727,24 @@ export async function resolveResponse<TRouter extends AnyRouter>(
       ): TRPCResponse<unknown, inferRouterError<TRouter>> => {
         const call = info.calls[index]!;
         if (error) {
-          return {
-            error: getErrorShape({
-              config,
-              ctx: ctxManager.valueOrUndefined(),
-              error,
-              input: call.result(),
-              path: call.path,
-              type: call.procedure?._def.type ?? 'unknown',
-            }),
-          };
+          return toTRPCResponse<TRouter>({
+            config,
+            ctx: ctxManager.valueOrUndefined(),
+            error,
+            input: call.result(),
+            path: call.path,
+            type: call.procedure?._def.type ?? 'unknown',
+          });
         }
-        return {
-          result: { data: result.data },
-        };
+        return toTRPCResponse<TRouter>({
+          config,
+          ctx: ctxManager.valueOrUndefined(),
+          error: undefined,
+          input: call.result(),
+          path: call.path,
+          type: call.procedure?._def.type ?? 'unknown',
+          resultData: result.data,
+        });
       },
     );
 
