@@ -36,7 +36,7 @@ function createBody(
     start(controller) {
       const onData = (chunk: Buffer) => {
         size += chunk.length;
-        if (!opts.maxBodySize || size <= opts.maxBodySize) {
+        if (opts.maxBodySize === null || size <= opts.maxBodySize) {
           controller.enqueue(
             new Uint8Array(chunk.buffer, chunk.byteOffset, chunk.byteLength),
           );

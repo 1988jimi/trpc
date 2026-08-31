@@ -162,6 +162,24 @@ test('POST with body and maxBodySize', async () => {
   server.close();
 });
 
+test('POST with body and maxBodySize = 0 rejects any payload', async () => {
+  const server = createServer({ maxBodySize: 0 });
+  await server.fetch(
+    {
+      method: 'POST',
+      body: '0',
+    },
+    async (request) => {
+      expect(request.method).toBe('POST');
+      await expect(request.text()).rejects.toThrowErrorMatchingInlineSnapshot(
+        `[TRPCError: PAYLOAD_TOO_LARGE]`,
+      );
+    },
+  );
+
+  await server.close();
+});
+
 test('retains url and search params', async () => {
   const server = createServer({ maxBodySize: null });
 
