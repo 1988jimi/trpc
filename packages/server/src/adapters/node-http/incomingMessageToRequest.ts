@@ -50,6 +50,7 @@ function createBody(
         hasClosed = true;
         req.off('data', onData);
         req.off('end', onEnd);
+        req.destroy();
       };
 
       const onEnd = () => {
