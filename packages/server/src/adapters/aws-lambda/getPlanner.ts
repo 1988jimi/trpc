@@ -82,6 +82,19 @@ const v1Processor: Processor<APIGatewayProxyEvent> = {
 
     const searchParams = new URLSearchParams();
 
+    if (event.multiValueQueryStringParameters) {
+      for (const [key, values] of Object.entries(
+        event.multiValueQueryStringParameters,
+      )) {
+        if (!values?.length) {
+          continue;
+        }
+        for (const value of values) {
+          searchParams.append(key, value);
+        }
+      }
+    }
+
     for (const [key, value] of Object.entries(
       event.queryStringParameters ?? {},
     )) {
