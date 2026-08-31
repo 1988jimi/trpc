@@ -102,8 +102,13 @@ export function dataLoader<TKey, TValue>(
 
       promise
         .then(async (result) => {
+          const values = await Promise.resolve(result);
+          if (values.length !== batch.items.length) {
+            throw new Error('Batch result size mismatch');
+          }
+
           await Promise.all(
-            result.map(async (valueOrPromise, index) => {
+            values.map(async (valueOrPromise, index) => {
               const item = batch.items[index]!;
               try {
                 const value = await Promise.resolve(valueOrPromise);
