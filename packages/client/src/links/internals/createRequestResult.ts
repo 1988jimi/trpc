@@ -1,9 +1,11 @@
 import { observable } from '@trpc/server/observable';
 import type { TRPCResponse } from '@trpc/server/rpc';
-import type { AnyTRPCRouter } from '@trpc/server/unstable-core-do-not-import';
-import { TRPCClientError } from '../../TRPCClientError';
-import type { CombinedDataTransformer } from '@trpc/server/unstable-core-do-not-import';
+import type {
+  AnyTRPCRouter,
+  CombinedDataTransformer,
+} from '@trpc/server/unstable-core-do-not-import';
 import { transformResult } from '@trpc/server/unstable-core-do-not-import';
+import { TRPCClientError } from '../../TRPCClientError';
 
 type RequestMeta = {
   response: unknown;
@@ -20,24 +22,24 @@ type HandlerOptions<TOutput> = {
   transformerOutput: CombinedDataTransformer['output'];
 };
 
-export function createRequestResultObservable<
-  TOutput,
->(opts: HandlerOptions<TOutput>) {
-  return observable<{
-    result: {
-      data: TOutput;
-    };
-    context?: Record<string, unknown>;
-  }, TRPCClientError<AnyTRPCRouter>>((observer) => {
+export function createRequestResultObservable<TOutput>(
+  opts: HandlerOptions<TOutput>,
+) {
+  return observable<
+    {
+      result: {
+        data: TOutput;
+      };
+      context?: Record<string, unknown>;
+    },
+    TRPCClientError<AnyTRPCRouter>
+  >((observer) => {
     let meta: RequestMeta | undefined;
 
     opts.request
       .then((res) => {
         meta = res.meta;
-        const transformed = transformResult(
-          res.json,
-          opts.transformerOutput,
-        );
+        const transformed = transformResult(res.json, opts.transformerOutput);
 
         if (!transformed.ok) {
           observer.error(

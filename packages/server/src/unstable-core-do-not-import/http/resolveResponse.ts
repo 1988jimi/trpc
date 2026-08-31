@@ -726,7 +726,10 @@ export async function resolveResponse<TRouter extends AnyRouter>(
      */
     headers.set('content-type', 'application/json');
     const responsePairs = (await Promise.all(rpcCalls)).map(
-      ([error, result], index): {
+      (
+        [error, result],
+        index,
+      ): {
         error?: TRPCError | undefined;
         response: TRPCResponse<unknown, inferRouterError<TRouter>>;
       } => {

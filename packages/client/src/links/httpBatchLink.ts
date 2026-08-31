@@ -1,9 +1,11 @@
 import type { AnyRouter, ProcedureType } from '@trpc/server';
+import { TRPCError } from '@trpc/server';
 import type { BatchLoader } from '../internals/dataLoader';
 import { dataLoader } from '../internals/dataLoader';
 import { allAbortSignals } from '../internals/signals';
 import type { NonEmptyArray } from '../internals/types';
 import type { HTTPBatchLinkOptions } from './HTTPBatchLinkOptions';
+import { createRequestResultObservable } from './internals/createRequestResult';
 import type { HTTPResult } from './internals/httpUtils';
 import {
   getUrl,
@@ -11,8 +13,6 @@ import {
   resolveHTTPLinkOptions,
 } from './internals/httpUtils';
 import type { Operation, TRPCLink } from './types';
-import { createRequestResultObservable } from './internals/createRequestResult';
-import { TRPCError } from '@trpc/server';
 
 /**
  * @see https://trpc.io/docs/client/links/httpBatchLink

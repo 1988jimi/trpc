@@ -1,8 +1,9 @@
-import type { AnyClientTypes, AnyTRPCRouter } from '@trpc/server/unstable-core-do-not-import';
 import type {
-  HTTPLinkBaseOptions,
-  Requester,
-} from './internals/httpUtils';
+  AnyClientTypes,
+  AnyTRPCRouter,
+} from '@trpc/server/unstable-core-do-not-import';
+import { createRequestResultObservable } from './internals/createRequestResult';
+import type { HTTPLinkBaseOptions, Requester } from './internals/httpUtils';
 import {
   getUrl,
   httpRequest,
@@ -16,7 +17,6 @@ import {
   type Operation,
   type TRPCLink,
 } from './types';
-import { createRequestResultObservable } from './internals/createRequestResult';
 
 export type HTTPLinkOptions<TRoot extends AnyClientTypes> =
   HTTPLinkBaseOptions<TRoot> & {

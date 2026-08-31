@@ -1,5 +1,5 @@
-import { expect, test } from 'vitest';
 import type { APIGatewayProxyEvent } from 'aws-lambda';
+import { expect, test } from 'vitest';
 import { getPlanner } from './getPlanner';
 
 test('v1 preserves multiValueQueryStringParameters', () => {
